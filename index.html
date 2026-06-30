@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>S1P → S2P Konverter</title>
+<style>
+  :root{
+    --bg: #0c1210;
+    --panel: #121a17;
+    --line: #2a3a35;
+    --line-bright: #3e5950;
+    --ink: #e7efe9;
+    --ink-dim: #8aa39a;
+    --trace: #5be38a;
+    --trace-dim: #2c5c43;
+    --amber: #e0a45a;
+    --mono: 'IBM Plex Mono','SF Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:32px 20px; min-height:100vh;
+    background:
+      radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 1px) 0 0/24px 24px,
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--mono);
+    display:flex; justify-content:center;
+  }
+  .wrap{ width:100%; max-width:760px; }
+
+  .hdr{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:22px; border-bottom:1px solid var(--line); padding-bottom:14px;}
+  .hdr h1{ font-size:15px; letter-spacing:.12em; text-transform:uppercase; margin:0; color:var(--ink);}
+  .hdr .tag{ font-size:11px; color:var(--ink-dim); letter-spacing:.08em;}
+
+  .drop{
+    border:1px dashed var(--line-bright);
+    background: linear-gradient(180deg, rgba(91,227,138,0.03), transparent);
+    border-radius:2px;
+    padding:42px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .15s ease, background .15s ease;
+    position:relative;
+  }
+  .drop.drag{ border-color:var(--trace); background:rgba(91,227,138,0.07); }
+  .drop .icon{
+    width:40px;height:40px;margin:0 auto 14px;
+    border:1px solid var(--line-bright); border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--trace);
+  }
+  .drop .main{ font-size:13px; color:var(--ink); margin-bottom:6px; }
+  .drop .sub{ font-size:11px; color:var(--ink-dim); }
+  .drop input{ display:none; }
+
+  .file-line{
+    display:none;
+    margin-top:14px;
+    border:1px solid var(--line);
+    padding:10px 14px;
+    font-size:12px;
+    align-items:center;
+    justify-content:space-between;
+    color:var(--ink-dim);
+  }
+  .file-line.show{ display:flex; }
+  .file-line .name{ color:var(--trace); }
+  .file-line button{
+    background:none;border:none;color:var(--ink-dim);
+    font-family:var(--mono); font-size:11px; cursor:pointer; text-decoration:underline;
+  }
+
+  .panel{
+    border:1px solid var(--line);
+    margin-top:18px;
+    background:var(--panel);
+  }
+  .panel-hdr{
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-dim); padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  .panel-body{ padding:16px 14px; }
+
+  .modes{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .mode{
+    border:1px solid var(--line); padding:10px 10px; cursor:pointer;
+    font-size:11px; color:var(--ink-dim); position:relative;
+  }
+  .mode .m-title{ color:var(--ink); font-size:12px; margin-bottom:4px; }
+  .mode.active{ border-color:var(--trace); background:rgba(91,227,138,0.06); color:var(--ink-dim);}
+  .mode.active .m-title{ color:var(--trace); }
+  .mode .dot{
+    position:absolute; top:10px; right:10px; width:7px;height:7px; border-radius:50%;
+    border:1px solid var(--line-bright);
+  }
+  .mode.active .dot{ background:var(--trace); border-color:var(--trace); }
+
+  .meta{ margin-top:16px; font-size:11px; color:var(--ink-dim); display:none; }
+  .meta.show{ display:grid; grid-template-columns:1fr 1fr; gap:6px 18px; }
+  .meta div b{ color:var(--ink); font-weight:normal; }
+  .meta .k{ color:var(--ink-dim); }
+
+  .actions{ margin-top:20px; display:flex; gap:10px; }
+  .btn{
+    flex:1; padding:13px; border:1px solid var(--line-bright);
+    background:transparent; color:var(--ink-dim);
+    font-family:var(--mono); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+    cursor:pointer; transition:all .15s ease;
+  }
+  .btn.primary{
+    border-color:var(--trace-dim); color:var(--trace); background:rgba(91,227,138,0.05);
+  }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .btn.primary:not(:disabled):hover{ background:rgba(91,227,138,0.13); border-color:var(--trace);}
+  .btn:not(.primary):not(:disabled):hover{ border-color:var(--ink-dim); color:var(--ink); }
+
+  .log{
+    margin-top:18px; font-size:11px; color:var(--ink-dim); min-height:18px;
+    border-left:2px solid var(--line); padding-left:10px; white-space:pre-wrap; line-height:1.6;
+  }
+  .log .ok{ color:var(--trace); }
+  .log .err{ color:#e35b5b; }
+  .log .warn{ color:var(--amber); }
+
+  .footer{ margin-top:26px; font-size:10px; color:var(--line-bright); text-align:center; letter-spacing:.08em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <h1>S1P → S2P Konverter</h1>
+    <span class="tag">1-Port → 2-Port Touchstone</span>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="fileInput" accept=".s1p,.S1P">
+    <div class="icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M12 3v12M12 3l-4 4M12 3l4 4"/>
+        <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+      </svg>
+    </div>
+    <div class="main">.s1p Datei hierher ziehen oder klicken</div>
+    <div class="sub">Touchstone 1-Port, ASCII (RI / MA / DB)</div>
+  </div>
+
+  <div class="file-line" id="fileLine">
+    <span>geladen: <span class="name" id="fileName"></span></span>
+    <button id="clearFile">entfernen</button>
+  </div>
+
+  <div class="meta" id="meta"></div>
+
+  <div class="panel">
+    <div class="panel-hdr">Auffüllmodus für S21 / S12 / S22</div>
+    <div class="panel-body">
+      <div class="modes">
+        <div class="mode active" data-mode="mirror">
+          <div class="dot"></div>
+          <div class="m-title">mirror</div>
+          S22 = S11, S21 = S12 = 0
+        </div>
+        <div class="mode" data-mode="zero">
+          <div class="dot"></div>
+          <div class="m-title">zero</div>
+          S22 = 0, S21 = S12 = 0
+        </div>
+        <div class="mode" data-mode="thru">
+          <div class="dot"></div>
+          <div class="m-title">thru</div>
+          S22 = 0, S21 = S12 = 1
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" id="convertBtn" disabled>Konvertieren</button>
+    <button class="btn" id="downloadBtn" disabled>.s2p speichern</button>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <div class="footer">läuft vollständig lokal im Browser · keine Datei verlässt diesen Tab</div>
+</div>
+
+<script>
+(function(){
+  const drop = document.getElementById('drop');
+  const fileInput = document.getElementById('fileInput');
+  const fileLine = document.getElementById('fileLine');
+  const fileNameEl = document.getElementById('fileName');
+  const clearFile = document.getElementById('clearFile');
+  const meta = document.getElementById('meta');
+  const convertBtn = document.getElementById('convertBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const logEl = document.getElementById('log');
+  const modes = document.querySelectorAll('.mode');
+
+  let mode = 'mirror';
+  let parsed = null;     // {freqs, s11re, s11im, freqUnit, paramType, z0, comments}
+  let outputText = null;
+  let outputName = 'output.s2p';
+
+  function log(msg, cls){
+    logEl.innerHTML = cls ? `<span class="${cls}">${msg}</span>` : msg;
+  }
+
+  modes.forEach(m => m.addEventListener('click', () => {
+    modes.forEach(x => x.classList.remove('active'));
+    m.classList.add('active');
+    mode = m.dataset.mode;
+    downloadBtn.disabled = true;
+    outputText = null;
+    if(parsed) log('Modus geändert — bitte erneut konvertieren.', 'warn');
+  }));
+
+  ['dragenter','dragover'].forEach(evt =>
+    drop.addEventListener(evt, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(evt =>
+    drop.addEventListener(evt, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+
+  drop.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if(f) handleFile(f);
+  });
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => {
+    if(e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  clearFile.addEventListener('click', e => {
+    e.stopPropagation();
+    resetAll();
+  });
+
+  function resetAll(){
+    parsed = null; outputText = null;
+    fileLine.classList.remove('show');
+    meta.classList.remove('show');
+    meta.innerHTML = '';
+    convertBtn.disabled = true;
+    downloadBtn.disabled = true;
+    fileInput.value = '';
+    log('');
+  }
+
+  function handleFile(f){
+    if(!/\.s1p$/i.test(f.name)){
+      log('Bitte eine .s1p Datei wählen.', 'err');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      try{
+        parsed = parseS1P(e.target.result);
+        fileNameEl.textContent = f.name;
+        fileLine.classList.add('show');
+        outputName = f.name.replace(/\.s1p$/i, '.s2p');
+        showMeta(parsed, f.name);
+        convertBtn.disabled = false;
+        downloadBtn.disabled = true;
+        outputText = null;
+        log(`${parsed.freqs.length} Frequenzpunkte erkannt. Bereit zur Konvertierung.`, 'ok');
+      }catch(err){
+        log('Fehler beim Einlesen: ' + err.message, 'err');
+        resetAll();
+      }
+    };
+    reader.readAsText(f);
+  }
+
+  function showMeta(p, fname){
+    meta.innerHTML = `
+      <div><span class="k">Datei</span><br><b>${fname}</b></div>
+      <div><span class="k">Punkte</span><br><b>${p.freqs.length}</b></div>
+      <div><span class="k">Frequenzbereich</span><br><b>${fmtHz(p.freqs[0])} – ${fmtHz(p.freqs[p.freqs.length-1])}</b></div>
+      <div><span class="k">Z0 / Format</span><br><b>${p.z0} Ω · ${p.paramType}</b></div>
+    `;
+    meta.classList.add('show');
+  }
+
+  function fmtHz(hz){
+    if(hz >= 1e9) return (hz/1e9).toFixed(3) + ' GHz';
+    if(hz >= 1e6) return (hz/1e6).toFixed(3) + ' MHz';
+    if(hz >= 1e3) return (hz/1e3).toFixed(3) + ' kHz';
+    return hz + ' Hz';
+  }
+
+  // --- Touchstone S1P Parser (RI / MA / DB, beliebige Frequenzeinheit) ---
+  function parseS1P(text){
+    const lines = text.split(/\r?\n/);
+    let freqUnit = 'HZ', paramType = 'RI', z0 = 50;
+    let headerFound = false;
+    const rows = [];
+
+    for(let raw of lines){
+      const line = raw.trim();
+      if(!line) continue;
+      if(line.startsWith('!')) continue;
+      if(line.startsWith('#')){
+        const toks = line.slice(1).trim().split(/\s+/);
+        // Format: <freqUnit> S <RI|MA|DB> R <z0>
+        toks.forEach((t,i) => {
+          const tu = t.toUpperCase();
+          if(['HZ','KHZ','MHZ','GHZ'].includes(tu)) freqUnit = tu;
+          if(['RI','MA','DB'].includes(tu)) paramType = tu;
+          if(tu === 'R' && toks[i+1]) z0 = parseFloat(toks[i+1]);
+        });
+        headerFound = true;
+        continue;
+      }
+      const vals = line.split(/\s+/).map(Number);
+      if(vals.length >= 3 && vals.every(v => !isNaN(v))){
+        rows.push(vals);
+      }
+    }
+
+    if(!headerFound) throw new Error('Kein gültiger Touchstone-Header (#-Zeile) gefunden.');
+    if(rows.length === 0) throw new Error('Keine Datenzeilen gefunden.');
+
+    const unitMul = {HZ:1, KHZ:1e3, MHZ:1e6, GHZ:1e9}[freqUnit];
+
+    const freqs = [], s11re = [], s11im = [];
+    for(const row of rows){
+      const f = row[0] * unitMul;
+      let re, im;
+      if(paramType === 'RI'){
+        re = row[1]; im = row[2];
+      } else if(paramType === 'MA'){
+        const mag = row[1], ang = row[2] * Math.PI/180;
+        re = mag*Math.cos(ang); im = mag*Math.sin(ang);
+      } else if(paramType === 'DB'){
+        const mag = Math.pow(10, row[1]/20), ang = row[2]*Math.PI/180;
+        re = mag*Math.cos(ang); im = mag*Math.sin(ang);
+      }
+      freqs.push(f); s11re.push(re); s11im.push(im);
+    }
+    return {freqs, s11re, s11im, freqUnit, paramType, z0};
+  }
+
+  convertBtn.addEventListener('click', () => {
+    if(!parsed){ return; }
+    try{
+      outputText = buildS2P(parsed, mode);
+      downloadBtn.disabled = false;
+      log(`Konvertiert (Modus: ${mode}). Datei kann jetzt gespeichert werden.`, 'ok');
+    }catch(err){
+      log('Fehler bei Konvertierung: ' + err.message, 'err');
+    }
+  });
+
+  function buildS2P(p, mode){
+    const lines = [];
+    lines.push('! Erstellt im Browser — S1P zu S2P Konverter');
+    lines.push(`! Auffüllmodus: ${mode}  (S21/S12/S22 synthetisiert, S11 aus Original)`);
+    lines.push(`# ${p.freqUnit} S RI R ${p.z0}`);
+    lines.push('!freq ReS11 ImS11 ReS21 ImS21 ReS12 ImS12 ReS22 ImS22');
+
+    const unitDiv = {HZ:1, KHZ:1e3, MHZ:1e6, GHZ:1e9}[p.freqUnit];
+
+    for(let i=0;i<p.freqs.length;i++){
+      const f = p.freqs[i] / unitDiv;
+      const re11 = p.s11re[i], im11 = p.s11im[i];
+      let re22=0, im22=0, re21=0, im21=0, re12=0, im12=0;
+      if(mode === 'mirror'){
+        re22 = re11; im22 = im11;
+      } else if(mode === 'zero'){
+        // all zero already
+      } else if(mode === 'thru'){
+        re21 = 1; re12 = 1;
+      }
+      lines.push(
+        `${fmtNum(f)} ${fmtNum(re11)} ${fmtNum(im11)} ${fmtNum(re21)} ${fmtNum(im21)} ${fmtNum(re12)} ${fmtNum(im12)} ${fmtNum(re22)} ${fmtNum(im22)}`
+      );
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  function fmtNum(n){
+    if(Number.isInteger(n)) return n.toString();
+    return n.toPrecision(15).replace(/0+$/,'').replace(/\.$/,'');
+  }
+
+  downloadBtn.addEventListener('click', () => {
+    if(!outputText) return;
+    const blob = new Blob([outputText], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = outputName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    log(`Gespeichert als ${outputName}`, 'ok');
+  });
+
+})();
+</script>
+</body>
+</html>
